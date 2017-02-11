@@ -1,0 +1,196 @@
+\title{Credit Case Study}
+\author{
+        Stephen Merrill and William White\\
+        STAT 536\\
+       }
+\date{\today}
+
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[margin=1.5in,footskip=0.25in]{geometry}
+\usepackage{graphicx}
+\graphicspath{ {/Users/William/STAT GRAD/} }
+\usepackage{grffile}
+\usepackage{caption}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\par Credit card companies are interested in predicting outstanding balances of potential customers. This is due to the potential profit to be made from interest on outstanding balances and the potential loss from customers that declare bankruptcy.  A company has collected data about their current customers and hope this information can be used to predict potential customer behavior. An accurate prediction method will allow the company to identify potential customers that are more likely to maintain a moderate monthly balance, who have the greatest potential for profit. 
+
+The dataset used in this analysis includes information on the outstanding credit card balance and several quantitative and qualitative characteristics of each cardholder.    The main problem is that there are 90 cardholders out of the 400 in the dataset that have zero outstanding balance.  This disrupts the assumption that the data are normally distributed. Also it negatively affects the linear relationship between balance and other quantitative variables.
+
+This analysis is meant to produce a predictive model to be used for potential customers.  The most important characteristics to predict balance are identified and a model is derived.  Assumptions that are made for the model are checked to see whether or not they are reasonable. This model is then tested for prediction accuracy. All of these steps are meant to provide the most predictive model possible using available methods.
+
+\section{Model Formulation \& Methodology}
+\subsection{Multiple Linear Regression (MLR) Model}
+\begin{equation*}
+Y=\beta_{0}+X_{I}\beta_{I}+X_{R}\beta_{R}+X_{S}\beta_{S}+X_{A}\beta_{A}+\epsilon
+\end{equation*}
+\begin{itemize}
+\item $Y$ : Credit Balance 
+\item $\beta_{0}$ : Intercept - balance for a non-student subject, aged zero, with no income or rating.
+\item $\beta_{I}$ : Effect for Income - for every \$1000 change in income, balance will change by $\beta_{I}$ dollars.
+\item $\beta_{R}$ : Effect for Rating - for every one unit change in rating, balance will change by $\beta_{R}$ dollars.
+\item $\beta_{S}$ : Effect for Student status - a status change from student to non-student or vice versa will change balance by $\beta_{S}$ dollars.
+\item $\beta_{A}$ : Effect for Age - for every one year change in age, balance will change by $\beta_{A}$ dollars.
+\item $\epsilon$ : The random error in the model.
+\end{itemize}
+A linear regression model allows for both inference and prediction to be made. For this problem, interest lies in making predictions of future customers' credit card balances. The model accomplishes this goal by determining the effect sizes (the $\beta$ values) of the significant variables: income, rating, student status and age. Once determined, prediction for balance can be made by gathering data on the subjects and making calculations according to the model.
+\subsection{MLR Assumptions}
+In order for multiple linear regression to be a valid model, the following assumptions about the data must be met.
+\paragraph{Linearity}
+Each variable must have a linear relationship with the response. If this is not the case, the entire model is invalid since it would be fitting a line to non-linear data. Transformations of the data are often used to solve this problem.
+\paragraph{Independence}
+The data must be independent. If this assumption is violated, measures of variability will typically be too small. This is a difficult assumption to verify. Usually prior knowledge of the data is required.
+\paragraph{Normality}
+The errors must be normally distributed. Otherwise, confidence and prediction intervals that depend on t distributions are incorrect.
+\paragraph{Equal Variance}
+The errors also must have equal variances. Without this, measures of variability will once again be invalid.
+\section{Model Justification \& Performance}
+\subsection{Model Selection}
+\paragraph{Adjusting for Zero Balance}
+Prior to finalizing the model selection, data analysis revealed serious violations of the normality assumption. This problem was a consequence of the 90 data points with zero balance. Since no transformation created normality, those 90 data points were removed. After doing so, all the assumptions were met.
+
+There are consequences of removing those data points. It is probable that there is some kind of relationship between the subjects with zero balance, and by removing them, the data can no longer be considered a random sample. This weakens the model's ability to make predictions since it is now built on the assumption that the subject has a non-zero balance. Therefore the credit card companies will not be able to accurately identify customers that will have zero balance using this model.
+\paragraph{Best Subset Selection}
+The raw sample data contained 10 different explanatory X variables. In order to determine which variables were most significant and find the model that yielded the best prediction of balance, the best subset selection method was used. This method looks at all possible combinations of variables in the model and selects the "best" one. However, there are many different criteria that define which model is best.
+
+A k-fold cross validation algorithm was selected as the criteria in selecting the best subset of variables to include in the model. This algorithm selects k subsets (called training sets) and determines the Mean Square Error (MSE) for each possible number of variables included in the model by making a prediction and comparing to the data not included in the training set. That data are known as the testing set. Once the number of variables to include is determined, best subset selection is done on the entire data set and the best model of the specified size is selected. Here, best is quantified using Residual Sums of Squares, the default criteria for best subset selection. 
+
+This algorithm, and use of cross validation error as the acceptance criteria, is appropriate for the data since the question of interest lies in making prediction and cross validation depends upon the subset prediction method previously outlined.\\
+\begin{center}
+\textbf{Figure 1}
+\end{center}
+<<a,echo=FALSE,fig.align="center",out.width="0.65\\linewidth",warning=FALSE>>=
+library(leaps)
+library(car)
+library(xtable)
+credit<-read.csv("/Users/William/Downloads/Credit.csv")
+credit2<-credit[,c(-1,-3)]
+credit3<-credit2[credit2$Balance>0,]
+predict.regsubsets<-function(object,newdata,id,...){
+  form<-as.formula(object$call[[2]])
+  mat<-model.matrix(form,newdata)
+  coefi<-coef(object,id=id)
+  xvars<-names(coefi)
+  mat[,xvars]%*%coefi
+}
+set.seed(38)
+train.credit3<-sample(c(TRUE,FALSE),nrow(credit3),rep=TRUE)
+test.credit3<-(!train.credit3)
+k<-10
+set.seed(38)
+folds<-sample(1:k,nrow(credit3),replace=TRUE)
+cv.errors<-matrix(NA,k,10,dimnames=list(NULL,paste(1:10)))
+
+for(j in 1:k){
+  best.fit<-regsubsets(Balance~.,data=credit3[folds!=j,],nvmax=10)
+  for(i in 1:10){
+    pred<-predict.regsubsets(best.fit,credit3[folds==j,],id=i)
+    cv.errors[j,i]<-mean( (credit3$Balance[folds==j]-pred)^2)
+  }
+}
+
+mean.cv.errors<-apply(cv.errors,2,mean)
+plot(mean.cv.errors,type='b',ylab="Mean Cross Validation Error")
+points(4,mean.cv.errors[4],col="red",pch=4,cex=2)
+
+@
+The graph above shows the mean cross validation error at each number of variables for the model.  As number of variables increases the mean CV error decreases until about 4 variables, when the difference in mean CV error as number of variables increases becomes small. 
+
+\paragraph{Interaction} A possible interaction between income and student status was considered. However, including this interaction in the model did not produce a significant effect, so it was not included in the final model. 
+\subsection{Model Assumptions Verification}
+\paragraph{Linearity}
+This Added-Variable plot matrix shows a clear linear relationship between each of the four explanatory variables and the response.\\
+
+\begin{center}
+\textbf{Figure 2}
+\end{center}
+
+<<b,echo=FALSE,fig.align="center",out.width="0.51\\linewidth">>=
+set.seed(38)
+train<-sample(nrow(credit3),nrow(credit3)*0.9)
+out.credit<-lm(Balance~Income+Rating+Age+Student,data=credit3,subset=train)
+avPlots(out.credit)
+@
+
+\paragraph{Independence}
+Independence is difficult to determine. Because there is no prior knowledge that would suggest a violation of this assumption, it is assumed to be met.
+\paragraph{Normality}
+This histogram and quantile plot of the residuals show that the errors are normally distributed.\\
+\pagebreak
+\begin{center}
+\textbf{Figure 3}
+\end{center}
+
+<<c,echo=FALSE,fig.align="center",out.width="0.56\\linewidth">>=
+par(mfrow=c(1,2))
+hist(scale(residuals(out.credit)),main="Histogram of Residuals",xlab="Scaled Residuals")
+
+qqnorm(scale(residuals(out.credit)))
+qqline(scale(residuals(out.credit)),col="red",lwd=2)
+@
+
+\paragraph{Equal Variance}
+This plot of the residuals offers no evidence of an unequal variance.
+\begin{center}
+\textbf{Figure 4}
+\end{center}
+\begin{center}
+\includegraphics[width=8cm, height=7cm]{Stat-536-case-study-1-resid-fit}
+\end{center}
+\subsection{Model Fit}
+The model fits the data very well. Every $\beta$ has a highly significant t value, which suggests that each individual effect is significant, and the entire model has a significant F-statistic, which means there is a significant effect from at least one $\beta$.
+\subsection{Prediction Results}
+In order to assess the ability of the model to predict accurately, another cross validation algorithm was used. The data were randomly subset into a training and testing set, with 90\% of the data in the training set and 10\% in the testing set. The model was fit to the training set, and then used with the data in the testing set to calculate prediction intervals. \\
+
+\begin{center}
+\textbf{Figure 5}
+\end{center}
+<<d,echo=FALSE,fig.align="center",out.width="0.65\\linewidth">>=
+par(mfrow=c(1,1))
+test <- data.frame(credit3[-train,])
+prd <- predict.lm(out.credit,test,interval=c("predict"))
+plot(1:31,predict(out.credit,test),ylim=c(-5,2100),main="Prediction Performance of Model",xlab="Observation number",ylab="Predicted balance")
+segments(1:31,prd[1:31,2],1:31,prd[1:31,3],col="red")
+points(1:31,test$Balance,col="blue",pch=4)
+legend("topleft",legend=c("Predicted Balance","Actual Balance","Prediction Interval"),col=c("black","blue","red"),pch=c(1,4,NA),lty=c(0,0,1))
+@
+For this subset of the data, the prediction intervals contained all 31 points in the testing set.
+
+\section{Results}
+The model was able to predict the balance of potential customers.  In order to use the regression model to make a prediction the subject's income, credit rating, age and student status are needed.  The table below gives the estimates of the effect size of each variable in the model along with 95\% confidence intervals for those estimates.
+
+\begin{center}
+\textbf{Table 1}
+\end{center}
+<<e,echo=FALSE,fig.align="center",out.width="0.65\\linewidth",results='asis'>>=
+estimate<-as.data.frame(summary(out.credit)$coefficients[,1])
+ci<-as.data.frame(summary(out.credit)$coefficients[,2])
+ci2<-as.data.frame(matrix(nrow=5,ncol=2))
+ci2[,1]<-round(estimate+c(-1.96)*ci,2)
+ci2[,2]<-round(estimate+c(1.96)*ci,2)
+ci3<-paste("(",ci2[,1],", ",ci2[,2],")",sep="")
+
+pred.table<-as.data.frame(cbind(estimate,ci3))
+names(pred.table)<-c("Estimate","95% CI")
+row.names(pred.table)<-c("Intercept","Income","Credit Rating","Age","Student Status")
+xtable(pred.table)
+@
+ 
+ 
+
+Income, age and rating can all be interpreted in the following way.  The estimate for income effect size is about -9.72, this means balance would be expected to decrease by \$9.72 on average as income is increased by \$1000. The student variable is interpreted a little differently.  The estimate of student status effect size is roughly 479.51, this means balance would be expected to be \$479.51 more on average if a customer is a student.   
+\section{Conclusions}
+This analysis was done to provide banks the most predictive model for potential customer balance.  This was accomplished by finding the best number of variables to use in the model and then carefully selecting that number of variables that were most predictive of balance. Underlying assumptions for the model were then verified.  The model was then used to predict the values of a small subset of the data and accuracy of the model was assessed.
+
+There were problems that had to be addressed.  Over 20\% of the customers in the dataset had zero balance.  This complicated the assumptions of normality and linearity.  It was decided to exclude these customers because no transformation or combination of transformations could be found to deal with these zero balance customers.  For future analysis a logistic regression equation could be used to deal with customers that potentially could have zero balance.  A logistic regression would predict whether a potential customer would have zero balance or not.  Then those potential customers predicted to have a non-zero balance would be run through the model described in this paper to predict their balance.  This two-step analysis would allow for the use of all of the data and to take into account potential customers that could have zero balance.
+\pagebreak
+
+\textbf{Teamwork}\\
+We split up duties on the EDA and the report.  Stephen wrote part of 2, 3 and 4 for the EDA and Will wrote 1 and part of 2.  Then we reviewed and edited each others work.  Stephen wrote about the method/model and the model justification and evaulation for the case study.  Will wrote the Introduction, Results and Conclusion for the case study.  We then reviewed and edited each other work.  We both collaborated on the graphs and the table.  Will compiled the report pdf using R Sweave.  Throughout the project we met several times to discuss what we would write and do.
+
+\end{document}
